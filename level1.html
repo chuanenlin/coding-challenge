@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<head>
+  <title>Level 1</title>
+  <script src="https://d3js.org/d3.v5.min.js"></script>
+  <style>
+    #body {
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <button onclick="changeMode('max')">Max</button>
+  <button onclick="changeMode('min')">Min</button>
+  <div id="body"></div>
+  <script>
+    months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    var svg = d3.select("#body").append("svg")
+      .attr("width", 1140)
+      .attr("height", 650);
+    var tooltip = d3.select("#body")
+      .append("div")
+      .style("opacity", "0")
+      .style("position", "absolute")
+      .style("padding", "10px")
+      .style("background-color", "white")
+      .style("font-family", "'Open Sans', sans-serif")
+      .style("font-size", "14px")
+      .style("z-index", "1");
+    var xScale = d3.scaleLinear();
+    var yScale = d3.scalePoint();
+    var color = d3.scaleSequential(d3.interpolateOrRd);
+    var colorScale = d3.scaleLinear();
+    var g = svg.append("g")
+      .attr("transform", "translate(" + 70 + "," + 40 + ")");
+    var defs = svg.append("defs");
+    var gradient = defs.append("linearGradient")
+      .attr("id", "gradient")
+      .selectAll("stop")
+      // figure this out
+      .data(color.ticks().reverse().map((t, i, n) => ({
+        offset: i / n.length,
+        color: color(t)
+      })))
+      .enter()
+      .append("stop")
+      .attr("offset", d => d.offset)
+      .attr("stop-color", d => d.color);
+    var legend = g.append('g')
+      .attr("transform", "translate(0," + (534) + ")")
+    legend.append("rect")
+      .attr("width", 300)
+      .attr("height", 30)
+      .style("fill", "url(#gradient)");
+    var matrix;
+    d3.csv("temperature_daily.csv").then(function(data) {
+      var parseTime = d3.timeParse("%Y-%m-%d");
+      var formatTime = d3.timeFormat("%Y-%m");
+      data.forEach(e => {
+        var date = parseTime(e.date);
+        e.year = date.getFullYear();
+        e.month = months[date.getMonth()];
+        e.ym = formatTime(date);
+      });
+      var _data = d3.nest()
+        .key(function(d) {
+          return d.ym;
+        })
+        .rollup(function(d) {
+          return {
+            "month": d[0].month,
+            "year": d[0].year,
+            "avg_min": d3.mean(d, function(d) {
+              return d.min_temperature;
+            }),
+            "avg_max": d3.mean(d, function(d) {
+              return d.max_temperature;
+            })
+          }
+        })
+        .entries(data);
+      var xRange = d3.extent(data.map(e => e.year));
+      var minTemp = d3.min(_data.map(e => e.value.avg_min));
+      var maxTemp = d3.max(_data.map(e => e.value.avg_max));
+      xScale.domain(xRange).range([500 / (xRange[1] - xRange[0]), 1000]);
+      yScale.domain(months).range([21, 504]);
+      color.domain([minTemp, maxTemp]);
+      colorScale.domain(color.domain()).range([300, 0]);
+      g.append("g")
+        .call(d3.axisTop(xScale).tickFormat(d3.format("d")).tickArguments([21]));
+      g.append("g")
+        .call(d3.axisLeft(yScale));
+      matrix = g.append("g").selectAll(".dot") //http://bl.ocks.org/weiglemc/6185069
+        .data(_data)
+        .enter().append("rect")
+        .attr("x", d => xScale(d.value.year) - 500 / (xRange[1] - xRange[0]) + 5)
+        .attr("y", d => yScale(d.value.month) - 16)
+        .attr("width", 1000 / (xRange[1] - xRange[0]) - 10)
+        .attr("height", 32)
+        .attr("fill", d => color(d.value.avg_max))
+        .on("mouseover", function(d) {
+          tooltip.transition().duration(200).style("opacity", "1").text("Date: " + d.key + "; max: " + d.value.avg_max.toFixed(0));
+        })
+        .on("mousemove", function() {
+          return tooltip.style("top", (event.pageY - 12) + "px").style("left", (event.pageX + 12) + "px");
+        })
+        .on("mouseout", function() {
+          return tooltip.style("opacity", "0");
+        });
+      colorAxis = legend.append('g')
+        .attr("transform", "translate(0," + 30 + ")")
+        .call(d3.axisBottom(colorScale));
+    })
+
+    function changeMode(mode) {
+      if (mode == "min") {
+        matrix.transition().duration(200).attr("fill", d => color(d.value.avg_min))
+          .on("mouseover", function(d) {
+            tooltip.transition().duration(200).style("opacity", "1").text("Date: " + d.key + "; min: " + d.value.avg_min.toFixed(0));
+          });
+      }
+      else {
+        matrix.transition().duration(200).attr("fill", d => color(d.value.avg_max))
+          .on("mouseover", function(d) {
+            tooltip.transition().duration(200).style("opacity", "1").text("Date: " + d.key + "; max: " + d.value.avg_max.toFixed(0));
+          });
+      }
+    }
+  </script>
+</body>
