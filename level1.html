@@ -13,7 +13,7 @@
   <button onclick="changeMode('min')">Min</button>
   <div id="body"></div>
   <script>
-    months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
     var svg = d3.select("#body").append("svg")
       .attr("width", 1140)
       .attr("height", 650);
@@ -36,7 +36,6 @@
     var gradient = defs.append("linearGradient")
       .attr("id", "gradient")
       .selectAll("stop")
-      // figure this out
       .data(color.ticks().reverse().map((t, i, n) => ({
         offset: i / n.length,
         color: color(t)
@@ -46,7 +45,7 @@
       .attr("offset", d => d.offset)
       .attr("stop-color", d => d.color);
     var legend = g.append('g')
-      .attr("transform", "translate(0," + (534) + ")")
+      .attr("transform", "translate(0," + 534 + ")")
     legend.append("rect")
       .attr("width", 300)
       .attr("height", 30)
@@ -106,8 +105,8 @@
         .on("mouseout", function() {
           return tooltip.style("opacity", "0");
         });
-      colorAxis = legend.append('g')
-        .attr("transform", "translate(0," + 30 + ")")
+      var colorAxis = legend.append('g')
+        .attr("transform", "translate(0, 30)")
         .call(d3.axisBottom(colorScale));
     })
 

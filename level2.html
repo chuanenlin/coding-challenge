@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<head>
+  <title>Level 2</title>
+  <script src="https://d3js.org/d3.v5.min.js"></script>
+  <style>
+    #body {
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <button onclick="changeMode('max')">Max</button>
+  <button onclick="changeMode('min')">Min</button>
+  <div id="body"></div>
+  <script>
+    var months = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+    var svg = d3.select("#body").append("svg")
+      .attr("width", 1504)
+      .attr("height", 640);
+    var tooltip = d3.select("#body")
+      .append("div")
+      .style("opacity", "0")
+      .style("position", "absolute")
+      .style("padding", "10px")
+      .style("background-color", "white")
+      .style("font-family", "'Open Sans', sans-serif")
+      .style("font-size", "14px")
+      .style("z-index", "1");
+    var mode = "max";
+    var xScale = d3.scaleLinear();
+    var yScale = d3.scalePoint();
+    var zScale = d3.scaleBand();
+    var wScale = d3.scaleLinear();
+    var color = d3.scaleSequential(d3.interpolateOrRd);
+    var colorScale = d3.scaleLinear();
+    var g = svg.append("g")
+      .attr("transform", "translate(70, 40)");
+    var xAxis = g.append("g");
+    var yAxis = g.append("g");
+    var matrix = g.append("g");
+    var defs = svg.append("defs");
+    var gradient = defs.append("linearGradient")
+      .attr("id", "gradient")
+      .selectAll("stop")
+      .data(color.ticks().reverse().map((t, i, n) => ({
+        offset: i / n.length,
+        color: color(t)
+      })))
+      .enter().append("stop")
+      .attr("offset", d => d.offset)
+      .attr("stop-color", d => d.color);
+    var legend = g.append('g')
+      .attr("transform", "translate(0, 550)")
+    legend.append("rect")
+      .attr("width", 300)
+      .attr("height", 30)
+      .style("fill", "url(#gradient)");
+    var __data;
+    d3.csv("temperature_daily.csv").then(function(data) {
+      var parseTime = d3.timeParse("%Y-%m-%d");
+      var formatTime = d3.timeFormat("%Y-%m");
+      data.forEach(e => {
+        var date = parseTime(e.date);
+        e.year = date.getFullYear();
+        e.month = months[date.getMonth()];
+        e.day = date.getDate();
+        e.ym = formatTime(date);
+        e.min_temperature = parseInt(e.min_temperature, 10);
+        e.max_temperature = parseInt(e.max_temperature, 10);
+      });
+      __data = d3.nest()
+        .key(function(d) {
+          return d.ym;
+        })
+        .rollup(function(d) {
+          return {
+            "month": d[0].month,
+            "year": d[0].year,
+            "avg_min": d3.mean(d, function(d) {
+              return d.min_temperature;
+            }),
+            "avg_max": d3.mean(d, function(d) {
+              return d.max_temperature;
+            }),
+            "daily": d.map(e => {
+              return {
+                "day": e.day,
+                "min": e.min_temperature,
+                "max": e.max_temperature
+              }
+            })
+          }
+        })
+        .entries(data);
+      __data.sort(function(a, b) {
+        return d3.descending(a.key, b.key);
+      })
+      var _data = __data.filter(function(d) {
+        return d.value.year > (d3.max(__data.map(e => e.value.year)) - 10) // graph only 2008 to 2017
+      });
+      var xRange = d3.extent(_data.map(e => e.value.year));
+      var minTemp = d3.min(_data.map(e => e.value.avg_min));
+      var maxTemp = d3.max(_data.map(e => e.value.avg_max));
+      var wMin = d3.min(_data.map(e => d3.min(e.value.daily.map(f => f.min))));
+      var wMax = d3.max(_data.map(e => d3.max(e.value.daily.map(f => f.max))));
+      xScale.domain(xRange).range([70, 1334]);
+      yScale.domain(months).range([22.5, 517.5]);
+      zScale.domain(d3.range(1, 32)).range([0, 134]);
+      wScale.domain([wMin, wMax]).range([39, 0]);
+      color.domain([minTemp, maxTemp]);
+      colorScale.domain(color.domain()).range([300, 0]);
+      g.append("g")
+        .call(d3.axisTop(xScale).tickFormat(d3.format("d")).tickArguments([11]));
+      g.append("g")
+        .call(d3.axisLeft(yScale));
+      var cell = matrix.selectAll("g")
+        .data(_data)
+        .enter()
+        .append("g")
+        .attr("transform", d => "translate(" + (xScale(d.value.year) - 67) + "," + (yScale(d.value.month) - 19.5) + ")");
+      cell.append("rect")
+        .attr("class", "heatmap")
+        .attr("width", 134)
+        .attr("height", 39)
+        .attr("fill", d => color(mode == "max" ? d.value.avg_max : d.value.avg_min))
+        .on("mouseover", function(d) {
+          tooltip.transition().duration(200).style("opacity", "1").text("Date: " + d.key + "; " + mode + ": " + (mode === "max" ? d.value.avg_max.toFixed(0) : d.value.avg_min.toFixed(0)));
+        })
+        .on("mousemove", function() {
+          return tooltip.style("top", (event.pageY - 12) + "px").style("left", (event.pageX + 12) + "px");
+        })
+        .on("mouseout", function() {
+          return tooltip.transition().duration(200).style("opacity", "0");
+        })
+      cell.append("g")
+        .attr("class", "max")
+        .selectAll("rect")
+        .data(function(d) {
+          return d.value.daily;
+        })
+        .enter()
+        .append("rect")
+        .attr("fill", "#16a085")
+        .attr("x", function(d) {
+          return zScale(d.day);
+        })
+        .attr("y", function(d) {
+          return wScale(d.max);
+        })
+        .attr("width", zScale.bandwidth())
+        .attr("height", 2);
+      cell.append("g")
+        .attr("class", "min")
+        .selectAll("rect")
+        .data(function(d) {
+          return d.value.daily;
+        })
+        .enter()
+        .append("rect")
+        .attr("fill", "#7ed6df")
+        .attr("x", function(d) {
+          return zScale(d.day);
+        })
+        .attr("y", function(d) {
+          return wScale(d.min);
+        })
+        .attr("width", zScale.bandwidth())
+        .attr("height", 2);
+      var colorAxis = legend.append('g')
+        .attr("transform", "translate(0, 30)")
+        .call(d3.axisBottom(colorScale));
+    })
+
+    function changeMode(modeString) {
+      if (modeString == "min") {
+        mode = "min";
+        matrix.selectAll("rect.heatmap").transition().duration(200).attr("fill", d => color(d.value.avg_min))
+          .on("mouseover", function(d) {
+            tooltip.transition().duration(200).style("opacity", "1").text("Date: " + d.key + "; min: " + d.value.avg_min.toFixed(0));
+          });
+      }
+      else {
+        mode = "max"
+        matrix.selectAll("rect.heatmap").transition().duration(200).attr("fill", d => color(d.value.avg_max))
+          .on("mouseover", function(d) {
+            tooltip.transition().duration(200).style("opacity", "1").text("Date: " + d.key + "; max: " + d.value.avg_max.toFixed(0));
+          });
+      }
+    }
+  </script>
+</body>
